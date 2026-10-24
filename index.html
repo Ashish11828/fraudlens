@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0" />
+<meta name="description" content="FraudLens helps you pause, check, and verify suspicious messages before acting." />
+<meta name="mrbd-web-app-capable" content="yes" />
+<title>FraudLens</title>
+<link rel="icon" href="data:," />
+
+<style>
+  :root{
+    --glass-bg: rgba(255,255,255,0.06);
+    --glass-border: rgba(255,255,255,0.12);
+    --accent: #7fd3ff;
+    --danger: #ff6b6b;
+    --safe: #9ae6b4;
+    --font-scale: 1;
+  }
+  *{ box-sizing: border-box; }
+  html,body,#root{ height:100%; margin:0; }
+  html{ font-size:18px; }
+  body{
+    width:100%;
+    max-width:600px;
+    margin:0 auto;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size:18px;
+    line-height:1.5;
+    background: radial-gradient(ellipse at center, #05060a 0%, #04040a 100%);
+    color:#f8fafc;
+    overflow-x:hidden;
+  }
+  /* --- High contrast theme: pure black/white with a high-visibility yellow accent --- */
+  body.high-contrast{
+    background:#000;
+    color:#fff;
+  }
+  body.high-contrast .glass-panel, body.high-contrast .device-600{
+    background:#000;
+    border-color:#fff;
+  }
+  body.high-contrast .choice{
+    background:#000;
+    border:2px solid #fff;
+    color:#fff;
+  }
+  body.high-contrast .choice:hover, body.high-contrast .choice:focus-visible{
+    background:#fff;
+    color:#000;
+  }
+  body.high-contrast .button-ghost{
+    background:#000;
+    border:2px solid #fff;
+    color:#fff;
+  }
+  body.high-contrast .button-ghost:hover, body.high-contrast .button-ghost.active{
+    background:#ffe600;
+    border-color:#ffe600;
+    color:#000;
+  }
+  body.high-contrast .view-desc{ background:#000; border:1px solid #fff; }
+  body.high-contrast .footnote{ opacity:1; color:#fff; }
+  body.high-contrast hr{ border-top-color:#fff; }
+  body.high-contrast .pressure-card{ border-color:#fff; }
+  body.high-contrast .read-aloud-btn{ background:#000; border:2px solid #fff; color:#fff; }
+  body.high-contrast .read-aloud-btn:hover, body.high-contrast .read-aloud-btn.speaking{ background:#ffe600; color:#000; border-color:#ffe600; }
+  body.high-contrast a, body.high-contrast label{ color:#fff; }
+  body.high-contrast input[type="checkbox"], body.high-contrast input[type="range"]{ accent-color:#ffe600; }
+  body.high-contrast *:focus-visible{ outline:3px solid #ffe600 !important; outline-offset:3px; }
+
+  body.dyslexic{
+    font-family: "Comic Sans MS", "Comic Sans", cursive, sans-serif;
+  }
+  body.reduced-motion *{ transition:none !important; animation:none !important; }
+
+  /* --- Read-aloud control (Web Speech API) --- */
+  .read-aloud-btn{
+    position:absolute; top:14px; right:14px;
+    width:40px; height:40px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.18);
+    color:inherit; cursor:pointer; font-size:18px; line-height:1; padding:0;
+    z-index:5;
+  }
+  .read-aloud-btn:hover{ background:rgba(255,255,255,0.14); }
+  .read-aloud-btn:focus-visible{ outline:3px solid rgba(127,211,255,0.7); outline-offset:2px; }
+  .read-aloud-btn.speaking{ background:var(--accent); color:#04121a; border-color:var(--accent); }
+
+  .text-size-presets{ display:flex; gap:8px; flex-wrap:wrap; }
+  .text-size-presets button{ font-family:inherit; }
+  .text-size-presets button.active{ border-color:var(--accent); color:var(--accent); }
+
+  .companion{ width:100%; max-width:600px; margin:20px auto; padding:0; }
+  .layout{ display:flex; flex-direction:column; gap:20px; width:100%; max-width:600px; }
+
+  /* --- Ray-Ban 600x600 device preview --- */
+  .device-600{
+    width:600px; max-width:100%; min-width:0; height:600px;
+    border-radius:36px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 6px 18px rgba(0,0,0,0.7);
+    padding:0;
+    flex:0 0 auto;
+    overflow:hidden;
+  }
+  .glass-panel{
+    width:100%; height:600px; max-width:600px; min-width:0;
+    border-radius:28px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    -webkit-backdrop-filter:blur(6px) saturate(1.1);
+    backdrop-filter:blur(6px) saturate(1.1);
+    border:1px solid var(--glass-border);
+    display:flex; align-items:center; justify-content:center;
+    padding:34px; box-sizing:border-box;
+    position:relative;
+    overflow:hidden;
+  }
+
+  /* Hard 600×600 safe area: every actionable element stays inside the display. */
+  .glass-panel .screen-stack{
+    max-width:100%;
+    max-height:100%;
+    overflow:hidden;
+  }
+  .glass-panel .choice{
+    min-width:0;
+    width:min(100%, 420px);
+    min-height:58px;
+    padding:14px 20px;
+  }
+  .glass-panel .choice-list{
+    gap:12px;
+  }
+  .glass-panel .large{
+    max-width:480px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+  .glass-panel .glass-title{
+    max-width:500px;
+  }
+  .settings-modal-backdrop{
+    position:absolute;
+    inset:0;
+    z-index:20;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px;
+    background:rgba(0,0,0,0.38);
+    -webkit-backdrop-filter:blur(8px);
+    backdrop-filter:blur(8px);
+  }
+  .settings-modal{
+    width:min(100%, 440px);
+    max-height:calc(100% - 24px);
+    overflow:auto;
+    border:1px solid rgba(255,255,255,0.18);
+    border-radius:28px;
+    padding:26px;
+    background:linear-gradient(180deg, rgba(28,32,42,0.94), rgba(10,12,18,0.94));
+    box-shadow:0 24px 70px rgba(0,0,0,0.55);
+  }
+  .settings-modal h2{
+    margin:0 0 6px;
+    font-size:24px;
+  }
+  .settings-modal .settings-sub{
+    font-size:1rem;
+    opacity:.72;
+    margin-bottom:18px;
+  }
+  .settings-modal .prefs-row{
+    padding:0;
+    gap:12px;
+  }
+  .settings-modal .prefs-row label{
+    padding:10px 4px;
+    min-height:46px;
+    cursor:pointer;
+  }
+  .settings-modal input[type="checkbox"]{
+    width:22px; height:22px;
+    flex:0 0 22px;
+  }
+  .settings-modal .settings-actions{
+    display:flex;
+    gap:10px;
+    margin-top:18px;
+  }
+  .settings-modal .settings-actions button{
+    flex:1;
+    min-height:50px;
+  }
+
+  .screen-stack{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; width:100%; }
+  .glass-title{ font-size:calc(28px * var(--font-scale)); font-weight:700; }
+  .glass-sub{ font-size:calc(18px * var(--font-scale)); opacity:0.92; }
+  .huge{ font-size:calc(34px * var(--font-scale)); line-height:1.05; font-weight:700; }
+  .large{ font-size:calc(20px * var(--font-scale)); }
+  .small{ font-size:calc(18px * var(--font-scale)); }
+
+  .choice-list{ display:flex; flex-direction:column; gap:10px; width:100%; align-items:center; }
+  .choice{
+    min-width:320px; max-width:90%;
+    padding:12px 18px; border-radius:14px;
+    border:1px solid rgba(255,255,255,0.06);
+    background:rgba(255,255,255,0.02);
+    color:inherit; font-size:calc(18px * var(--font-scale));
+    cursor:pointer; font-family:inherit;
+  }
+  .choice:hover{ background:rgba(255,255,255,0.06); }
+  .choice:focus-visible{ outline:3px solid rgba(127,211,255,0.5); outline-offset:3px; }
+
+  .button-ghost{
+    border:1px solid rgba(255,255,255,0.08);
+    padding:10px 18px; border-radius:12px;
+    background:rgba(255,255,255,0.02);
+    color:inherit; text-decoration:none; font-family:inherit;
+    cursor:pointer; font-size:1rem;
+  }
+  .button-ghost:hover{ background:rgba(255,255,255,0.06); }
+  .button-ghost.active{ border-color:var(--accent); color:var(--accent); }
+
+  .result-high{ color:var(--danger); font-weight:800; }
+  .result-low{ color:var(--safe); font-weight:800; }
+
+  .pressure-card{ display:flex; flex-direction:column; align-items:flex-start; text-align:left; width:100%; }
+  .pressure-card .p-title{ font-weight:800; }
+  .pressure-card .p-example{ font-size:1rem; opacity:0.95; }
+
+  h1{ font-size:24px; font-weight:700; margin:0 0 8px; }
+  h2{ font-size:18px; font-weight:700; margin:16px 0 4px; }
+  h3{ font-size:18px; font-weight:600; margin:16px 0 8px; }
+  p{ margin:0 0 12px; line-height:1.5; }
+  nav.companion-nav{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .view-desc{ padding:12px 14px; background:rgba(255,255,255,0.04); border-radius:10px; margin-bottom:12px; font-size:1rem; }
+  hr{ border:none; border-top:1px solid rgba(255,255,255,0.1); margin:16px 0; }
+  .footnote{ font-size:1rem; opacity:0.85; }
+
+  .prefs-row{ display:flex; flex-direction:column; gap:10px; padding:12px 0; }
+  .prefs-row label{ display:flex; align-items:center; gap:8px; font-size:1rem; }
+  .preview-shrink{ transform:scale(0.4); transform-origin:top left; width:240px; height:240px; overflow:hidden; }
+
+  .companion-right{ width:100%; max-width:600px; min-width:0; text-align:left; }
+
+  @media (max-height: 620px){
+    body{ overflow:hidden; }
+    .device-600, .glass-panel{ border-radius:0; }
+    .device-600{ box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+  <div id="root">
+    <div class="companion">
+      <div class="layout">
+        <!-- Ray-Ban glasses 600x600 live preview -->
+        <div class="device-600">
+          <div class="glass-panel" role="application" aria-label="FraudLens glass interface" id="device" tabindex="0"></div>
+        </div>
+
+        <!-- Desktop/mobile companion panel -->
+        <div class="companion-right">
+          <h1>FraudLens Companion</h1>
+          <p>Configure accessibility, practice scenarios, and preview how the Ray‑Ban display experience appears.</p>
+
+          <nav class="companion-nav" aria-label="companion navigation">
+            <a href="/" class="button-ghost" data-route="/">Glass Home</a>
+            <a href="/check" class="button-ghost" data-route="/check">Start Check</a>
+            <a href="/simulator" class="button-ghost" data-route="/simulator">Simulator</a>
+            <a href="/pressure" class="button-ghost" data-route="/pressure">Pressure Cards</a>
+          </nav>
+
+          <div id="companion-desc" class="view-desc"></div>
+          <div id="companion-extra"></div>
+
+          <hr />
+          <p class="footnote">Designed for Ray‑Ban Display 600×600 — glanceable, accessible, and calm.<br/>
+          Use ← (Yes) / → or ↓ (No) / Enter / Esc while the device preview is focused, just like the glasses' D‑pad.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------------------------------------------------
+   *  Data (ported 1:1 from src/data/*.ts)
+   * --------------------------------------------------------- */
+  var scenarios = [
+    {
+      id:'sbi-urgent',
+      text:'URGENT: Your SBI account will be suspended today. Verify your KYC immediately using this link.',
+      isScam:true,
+      reasons:['Urgency','Threat of account closure','Suspicious link']
+    },
+    {
+      id:'delivery-pay',
+      text:'Delivery failed — pay ₹49 now to reschedule, click here.',
+      isScam:true,
+      reasons:['Unsolicited payment request','Suspicious link']
+    },
+    {
+      id:'friend-ask',
+      text:'A friend sent a short link asking you to view a video now.',
+      isScam:false,
+      reasons:[]
+    }
+  ];
+
+  var pressureCards = [
+    {title:'URGENCY', example:'"Pay within 10 minutes."'},
+    {title:'FEAR', example:'"Your account will be blocked."'},
+    {title:'AUTHORITY', example:'"We are calling from your bank."'},
+    {title:'REWARD', example:'"You have won ₹50,000."'},
+    {title:'SECRECY', example:'"Do not tell anyone."'}
+  ];
+
+  var questions = [
+    'Did they ask you for money?',
+    'Did they create urgency?',
+    'Did they ask you to click a link?',
+    'Did they ask for an OTP, password, or banking details?'
+  ];
+
+  /* ---------------------------------------------------------
+   *  Store (replaces zustand + localStorage persistence)
+   * --------------------------------------------------------- */
+  var Store = {
+    state: {
+      familyMode: localStorage.getItem('fraudlens.familyMode') === 'true',
+      highContrast: localStorage.getItem('fraudlens.highContrast') === 'true',
+      reducedMotion: localStorage.getItem('fraudlens.reducedMotion') === 'true',
+      dyslexicFont: localStorage.getItem('fraudlens.dyslexicFont') === 'true',
+      readAloud: localStorage.getItem('fraudlens.readAloud') === 'true',
+      fontSize: Number(localStorage.getItem('fraudlens.fontSize')) || 16
+    },
+    set: function(patch){
+      Object.assign(this.state, patch);
+      Object.keys(patch).forEach(function(k){
+        localStorage.setItem('fraudlens.' + k, String(patch[k]));
+      });
+      applyAccessibility();
+      // re-render whatever is currently shown so toggles take effect immediately
+      router();
+    }
+  };
+
+  function applyAccessibility(){
+    var s = Store.state;
+    document.body.classList.toggle('high-contrast', s.highContrast);
+    document.body.classList.toggle('dyslexic', s.dyslexicFont);
+    document.body.classList.toggle('reduced-motion', s.reducedMotion);
+    document.documentElement.style.setProperty('--font-scale', String(s.fontSize / 16));
+  }
+
+  /* ---------------------------------------------------------
+   *  Read Content aloud — Web Speech API (speechSynthesis)
+   *  Works in Chrome, Edge, Safari; silently no-ops elsewhere.
+   * --------------------------------------------------------- */
+  var speechSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+  function stopSpeaking(){
+    if(speechSupported) window.speechSynthesis.cancel();
+    document.querySelectorAll('.read-aloud-btn.speaking').forEach(function(b){ b.classList.remove('speaking'); });
+  }
+
+  function speak(text, btn){
+    if(!speechSupported || !text) return;
+    window.speechSynthesis.cancel();
+    var utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 0.92;
+    utter.pitch = 1;
+    if(btn){
+      utter.onstart = function(){ btn.classList.add('speaking'); };
+      utter.onend = function(){ btn.classList.remove('speaking'); };
+      utter.onerror = function(){ btn.classList.remove('speaking'); };
+    }
+    window.speechSynthesis.speak(utter);
+  }
+
+  /* ---------------------------------------------------------
+   *  Small DOM helpers
+   * --------------------------------------------------------- */
+  function el(tag, attrs, children){
+    var node = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function(k){
+      if(k === 'class') node.className = attrs[k];
+      else if(k === 'text') node.textContent = attrs[k];
+      else if(k === 'html') node.innerHTML = attrs[k];
+      else if(k.indexOf('on') === 0 && typeof attrs[k] === 'function') node.addEventListener(k.slice(2), attrs[k]);
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function(c){ if(c) node.appendChild(c); });
+    return node;
+  }
+
+  function glassButton(label, onClick, ariaLabel){
+    return el('button', {
+      class:'choice',
+      'aria-label': ariaLabel || label,
+      onclick: onClick
+    }, [document.createTextNode(label)]);
+  }
+
+  function glassShell(title, subtitle, contentNode){
+    var stack = el('div', {class:'screen-stack', role:'region', 'aria-label': title || 'FraudLens screen'});
+    if(title) stack.appendChild(el('div', {class:'glass-title huge', text:title}));
+    if(subtitle) stack.appendChild(el('div', {class:'glass-sub large', text:subtitle}));
+    var wrap = el('div', {style:'width:100%'}, [contentNode]);
+    stack.appendChild(wrap);
+    return stack;
+  }
+
+  // Every screen goes through here: stops any in-flight speech, mounts the
+  // screen, adds a working "read aloud" control, and auto-reads it if the
+  // user has that preference on. This is the single source of truth for
+  // what text gets spoken — it reads exactly what's visibly on screen.
+  function finalizeScreen(screenNode){
+    stopSpeaking();
+    deviceEl.appendChild(screenNode);
+
+    var text = screenNode.textContent.replace(/\s+/g, ' ').trim();
+    var readBtn = el('button', {
+      class:'read-aloud-btn',
+      type:'button',
+      'aria-label':'Read this screen aloud',
+      title:'Read screen aloud'
+    }, [document.createTextNode('🔊')]);
+    readBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(readBtn.classList.contains('speaking')){ stopSpeaking(); return; }
+      speak(text, readBtn);
+    });
+    if(!speechSupported){
+      readBtn.disabled = true;
+      readBtn.title = 'Read aloud is not supported in this browser';
+      readBtn.setAttribute('aria-disabled', 'true');
+    }
+    deviceEl.appendChild(readBtn);
+
+    if(Store.state.readAloud && speechSupported){
+      speak(text, readBtn);
+    }
+  }
+
+  /* ---------------------------------------------------------
+   *  Router
+   *  Routes mirror the original React Router paths:
+   *  /              GlassHome
+   *  /check         ScamCoach step 1..4
+   *  /check/result  ResultScreen
+   *  /simulator     ScamSimulator
+   *  /pressure      PressureDetector
+   *  /companion     Companion settings
+   *  /family        FamilyMode (bonus route, reachable from Settings)
+   * --------------------------------------------------------- */
+  var deviceEl = document.getElementById('device');
+  var descEl = document.getElementById('companion-desc');
+  var extraEl = document.getElementById('companion-extra');
+  var navLinks = document.querySelectorAll('[data-route]');
+  navLinks.forEach(function(link){
+    link.addEventListener('click', function(e){
+      var route = link.getAttribute('data-route') || '/';
+      e.preventDefault();
+      navigate(route);
+    });
+  });
+
+  // Transient in-memory state for the current check-flow / simulator
+  var coachState = { step: 0, answers: [] };
+  var simState = { index: 0, showResult: false };
+
+  function currentPath(){
+    var path = location.pathname || '/';
+    if(path === '/index.html') return '/';
+    if(path && path.charAt(0) === '/') return path;
+    return '/';
+  }
+
+  function navigate(path){
+    var next = path || '/';
+    if(next.charAt(0) !== '/') next = '/' + next;
+    if(next === currentPath()) return;
+    if(window.history && typeof window.history.pushState === 'function'){
+      window.history.pushState({route: next}, '', next);
+      router();
+    } else {
+      location.pathname = next;
+    }
+  }
+
+  function setActiveNav(path){
+    navLinks.forEach(function(a){
+      var base = a.getAttribute('data-route');
+      var isActive = path === base || (base !== '/' && path.indexOf(base) === 0);
+      a.classList.toggle('active', isActive);
+    });
+  }
+
+  function router(){
+    var path = currentPath();
+    setActiveNav(path);
+
+    stopSpeaking();
+    deviceEl.innerHTML = '';
+    descEl.innerHTML = '';
+    extraEl.innerHTML = '';
+
+    if(path === '/' ){
+      renderHome();
+    } else if(path === '/check'){
+      coachState = { step: 0, answers: [] };
+      renderCoachStep();
+    } else if(path === '/check/result'){
+      renderResult();
+    } else if(path === '/simulator'){
+      renderSimulator();
+    } else if(path === '/pressure'){
+      renderPressure();
+    } else if(path === '/companion'){
+      renderCompanionSettings();
+    } else if(path === '/family'){
+      renderFamilyMode();
+    } else {
+      renderHome();
+    }
+
+    deviceEl.focus({preventScroll:true});
+  }
+
+  window.addEventListener('popstate', router);
+
+  /* ---------------------------------------------------------
+   *  Screens
+   * --------------------------------------------------------- */
+
+  // Settings opens as a centered overlay inside the 600×600 glasses viewport.
+  function openSettingsModal(){
+    var existing = deviceEl.querySelector('.settings-modal-backdrop');
+    if(existing) return;
+
+    var s = Store.state;
+    var backdrop = el('div', {class:'settings-modal-backdrop', role:'dialog', 'aria-modal':'true', 'aria-label':'FraudLens settings'});
+    var modal = el('div', {class:'settings-modal'});
+    modal.addEventListener('click', function(e){ e.stopPropagation(); });
+
+    modal.appendChild(el('h2', {text:'SETTINGS'}));
+    modal.appendChild(el('div', {class:'settings-sub', text:'Personalize your glasses experience.'}));
+
+    var prefs = el('div', {class:'prefs-row'});
+
+    var presetWrap = el('div', {class:'text-size-presets', style:'justify-content:center;'});
+    [['A',16,'Normal'],['A+',22,'Large'],['A++',30,'Extra large']].forEach(function(p){
+      var b = el('button', {type:'button', class:'button-ghost' + (s.fontSize === p[1] ? ' active' : ''), text:p[0], 'aria-label':p[2] + ' text'});
+      b.addEventListener('click', function(){ Store.set({fontSize:p[1]}); openSettingsModal(); });
+      presetWrap.appendChild(b);
+    });
+    prefs.appendChild(el('div', {style:'font-size:1rem;opacity:.7;text-align:center;', text:'TEXT SIZE'}));
+    prefs.appendChild(presetWrap);
+
+    prefs.appendChild(checkboxRow('High contrast', s.highContrast, function(checked){ Store.set({highContrast:checked}); openSettingsModal(); }));
+    prefs.appendChild(checkboxRow('Dyslexia-friendly font', s.dyslexicFont, function(checked){ Store.set({dyslexicFont:checked}); openSettingsModal(); }));
+    prefs.appendChild(checkboxRow('Reduce motion', s.reducedMotion, function(checked){ Store.set({reducedMotion:checked}); openSettingsModal(); }));
+    prefs.appendChild(checkboxRow('Read screens aloud', s.readAloud, function(checked){ Store.set({readAloud:checked}); openSettingsModal(); }));
+
+    modal.appendChild(prefs);
+
+    var actions = el('div', {class:'settings-actions'});
+    var close = el('button', {type:'button', class:'button-ghost', text:'← BACK', 'aria-label':'Close settings'});
+    close.addEventListener('click', function(){ backdrop.remove(); deviceEl.focus({preventScroll:true}); });
+    actions.appendChild(close);
+    modal.appendChild(actions);
+    backdrop.appendChild(modal);
+    backdrop.addEventListener('click', function(){ backdrop.remove(); });
+    deviceEl.appendChild(backdrop);
+
+    setTimeout(function(){ close.focus({preventScroll:true}); }, 0);
+  }
+
+  // GlassHome
+  function renderHome(){
+    var content = el('div', {style:'display:flex;flex-direction:column;gap:14px;align-items:center;position:relative;width:100%;'}, [
+      glassButton('CHECK SOMETHING', function(){ navigate('/check'); }, 'Check something'),
+      glassButton('LEARN', function(){ navigate('/simulator'); }, 'Learn with simulator'),
+      glassButton('PRESSURE CARDS', function(){ navigate('/pressure'); }, 'Open pressure cards'),
+      glassButton('SETTINGS', function(){ openSettingsModal(); }, 'Open settings')
+    ]);
+    finalizeScreen(glassShell('FraudLens', 'PAUSE. CHECK. VERIFY.', content));
+
+    descEl.textContent = 'Select an action on the device preview to see the live view.';
+  }
+
+  // ScamCoach — one question per glance, D-pad style Yes/No
+  function renderCoachStep(){
+    deviceEl.innerHTML = '';
+    var step = coachState.step;
+    var q = questions[step];
+
+    var body = el('div', {style:'max-width:360px'});
+    body.appendChild(el('div', {class:'large', style:'margin-bottom:12px', text:q}));
+    var list = el('div', {class:'choice-list', role:'list'});
+    list.appendChild(glassButton('YES →', function(){ onCoachAnswer(true); }, 'Yes'));
+    list.appendChild(glassButton('NO ↓', function(){ onCoachAnswer(false); }, 'No'));
+    body.appendChild(list);
+
+    finalizeScreen(glassShell('POSSIBLE SCAM', (step + 1) + ' / ' + questions.length, body));
+
+    descEl.textContent = 'Demo in progress — question ' + (step + 1) + ' of ' + questions.length + '. Use the device preview controls or ← / → / Enter.';
+  }
+
+  function onCoachAnswer(val){
+    coachState.answers[coachState.step] = val;
+    var next = coachState.step + 1;
+    if(next >= questions.length){
+      navigate('/check/result');
+    } else {
+      coachState.step = next;
+      renderCoachStep();
+    }
+  }
+
+  // ResultScreen
+  function renderResult(){
+    var answers = coachState.answers.length ? coachState.answers : [true, true, true, false];
+    var warnings = answers.filter(Boolean).length;
+    var risk = warnings >= 3 ? 'HIGH RISK' : warnings === 0 ? 'LOW RISK' : 'LIKELY SUSPICIOUS';
+    var isHigh = risk === 'HIGH RISK';
+
+    var body = el('div', {style:'display:flex;flex-direction:column;gap:12px;align-items:center;'});
+    body.appendChild(el('div', {
+      class: isHigh ? 'result-high' : 'result-low',
+      style:'font-weight:900;font-size:22px',
+      text: isHigh ? "DON'T PAY" : "DON'T RUSH"
+    }));
+
+    var detail = el('div', {style:'font-size:1rem;max-width:360px'});
+    if(isHigh){
+      detail.appendChild(document.createTextNode("DON'T CLICK"));
+      detail.appendChild(el('br'));
+      detail.appendChild(document.createTextNode("DON'T SHARE OTP"));
+    } else {
+      detail.textContent = 'No obvious warning signs — verify via official app.';
+    }
+    body.appendChild(detail);
+
+    var btnRow = el('div', {style:'display:flex;gap:10px'}, [
+      glassButton('OK', function(){ navigate('/'); }, 'Back to home'),
+      glassButton('VERIFY', function(){ navigate('/companion'); }, 'Open companion')
+    ]);
+    body.appendChild(btnRow);
+
+    body.appendChild(el('div', {style:'font-size:11px;opacity:0.9;margin-top:10px', text:'FraudLens can be wrong. Verify through an official channel.'}));
+
+    finalizeScreen(glassShell(risk, warnings + ' warning sign' + (warnings === 1 ? '' : 's') + ' detected', body));
+
+    descEl.textContent = 'Result: ' + risk + '. Remember — verify anything risky through the official app or website before acting.';
+  }
+
+  // ScamSimulator
+  function renderSimulator(){
+    deviceEl.innerHTML = '';
+    var s = scenarios[simState.index];
+    var body = el('div', {style:'max-width:420px'});
+    body.appendChild(el('div', {style:'font-size:1rem;margin-bottom:12px', text: s.text}));
+
+    var row = el('div', {style:'display:flex;gap:10px;justify-content:center'});
+    row.appendChild(glassButton('SAFE', function(){ guessSimulator(false); }));
+    row.appendChild(glassButton('SCAM', function(){ guessSimulator(true); }));
+    body.appendChild(row);
+
+    if(simState.showResult){
+      var resultLine = el('div', {style:'margin-top:14px;font-weight:800', class:'result-high', text: s.isScam ? 'SCAM' : 'LIKELY SAFE'});
+      body.appendChild(resultLine);
+      if(s.reasons && s.reasons.length){
+        var reasonsList = el('ul', {style:'text-align:left;font-size:1rem;margin-top:8px;padding-left:18px;'});
+        s.reasons.forEach(function(r){ reasonsList.appendChild(el('li', {text:r})); });
+        body.appendChild(reasonsList);
+      }
+    }
+
+    finalizeScreen(glassShell('SCAM SIMULATOR', 'Scenario ' + (simState.index + 1) + ' / ' + scenarios.length, body));
+    descEl.textContent = 'Run short scam challenges and review results — tap SAFE or SCAM to guess.';
+  }
+
+  function guessSimulator(isScamGuess){
+    simState.showResult = true;
+    renderSimulator();
+    setTimeout(function(){
+      simState.showResult = false;
+      simState.index = (simState.index + 1) % scenarios.length;
+      // only re-render if still on the simulator screen
+      if(currentPath() === '/simulator') renderSimulator();
+    }, 1600);
+  }
+
+  // PressureDetector
+  function renderPressure(){
+    var list = el('div', {style:'display:flex;flex-direction:column;gap:10px;width:100%;'});
+    pressureCards.forEach(function(c){
+      var card = el('div', {class:'choice pressure-card'});
+      card.appendChild(el('div', {class:'p-title', text:c.title}));
+      card.appendChild(el('div', {class:'p-example', text:c.example}));
+      list.appendChild(card);
+    });
+    finalizeScreen(glassShell('PRESSURE DETECTOR', 'Common manipulation patterns', list));
+    descEl.textContent = 'Learn about common pressure patterns scammers use to rush you.';
+  }
+
+  // FamilyMode
+  function renderFamilyMode(){
+    var body = el('div', {style:'max-width:420px;display:flex;flex-direction:column;gap:12px;'});
+    body.appendChild(el('div', {style:'font-size:18px;font-weight:800', text:'This message may be trying to steal your login details.'}));
+    body.appendChild(el('div', {style:'font-size:1rem', text:'Large text, fewer choices, safe defaults. If unsure, always ask someone you trust.'}));
+    var row = el('div', {style:'display:flex;gap:10px'});
+    row.appendChild(glassButton('Ask a family member', function(){ navigate('/companion'); }));
+    row.appendChild(glassButton('Verify via official app', function(){ navigate('/companion'); }));
+    body.appendChild(row);
+    finalizeScreen(glassShell('FAMILY MODE', 'Simplified guidance for elders', body));
+    descEl.textContent = 'A simplified experience for elderly or non-technical users — larger text, fewer choices.';
+  }
+
+  // Companion settings (right-hand desktop panel, plus a live mini preview)
+  function renderCompanionSettings(){
+    // The glasses side shows the actual centered settings experience.
+    var body = el('div', {style:'text-align:center;'});
+    body.appendChild(el('div', {class:'glass-sub', text:'Settings open as a centered overlay on the glasses.'}));
+    finalizeScreen(glassShell('SETTINGS', '600×600 CENTERED MENU', body));
+    openSettingsModal();
+
+    descEl.textContent = 'Accessibility preferences live here. Changes apply instantly to the glasses preview.';
+
+    var s = Store.state;
+    var wrap = el('div');
+
+    wrap.appendChild(el('h2', {text:'Accessibility Preferences'}));
+    var prefs = el('div', {class:'prefs-row'});
+
+    // --- Visual accessibility: text size ---
+    var fontLabel = el('label', {text: 'Text size: ' + s.fontSize + 'px '});
+    var fontInput = el('input', {type:'range', min:'12', max:'40', step:'1', value:String(s.fontSize), style:'flex:1;max-width:220px;'});
+    fontInput.addEventListener('input', function(e){
+      Store.set({ fontSize: Number(e.target.value) });
+    });
+    fontLabel.appendChild(fontInput);
+    prefs.appendChild(fontLabel);
+
+    var presetWrap = el('div', {class:'text-size-presets'});
+    [ ['A', 16, 'Normal text size'], ['A+', 22, 'Large text size'], ['A++', 30, 'Extra large text size'] ].forEach(function(p){
+      var b = el('button', {
+        type:'button', class:'button-ghost' + (s.fontSize === p[1] ? ' active' : ''),
+        'aria-label': p[2], text: p[0]
+      });
+      b.addEventListener('click', function(){ Store.set({ fontSize: p[1] }); });
+      presetWrap.appendChild(b);
+    });
+    prefs.appendChild(presetWrap);
+
+    // --- Visual accessibility: contrast + font + motion ---
+    prefs.appendChild(checkboxRow('High contrast mode', s.highContrast, function(checked){ Store.set({highContrast: checked}); }));
+    prefs.appendChild(checkboxRow('Dyslexia-friendly font', s.dyslexicFont, function(checked){ Store.set({dyslexicFont: checked}); }));
+    prefs.appendChild(checkboxRow('Reduce motion', s.reducedMotion, function(checked){ Store.set({reducedMotion: checked}); }));
+
+    // --- Read content aloud (Web Speech API) ---
+    var readRow = checkboxRow('Read screens aloud automatically', s.readAloud, function(checked){ Store.set({readAloud: checked}); });
+    prefs.appendChild(readRow);
+    if(!speechSupported){
+      prefs.appendChild(el('div', {class:'footnote', style:'margin-top:-4px;', text:'Your browser does not support read-aloud. Every screen still has a 🔊 button, but it will be disabled.'}));
+    } else {
+      prefs.appendChild(el('div', {class:'footnote', style:'margin-top:-4px;', text:'Every screen also has a 🔊 button in the top-right corner to read it aloud on demand.'}));
+    }
+
+    wrap.appendChild(prefs);
+    extraEl.appendChild(wrap);
+  }
+
+  function checkboxRow(labelText, checked, onChange){
+    var label = el('label');
+    var input = el('input', {type:'checkbox'});
+    input.checked = checked;
+    input.addEventListener('change', function(e){ onChange(e.target.checked); });
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(' ' + labelText));
+    return label;
+  }
+
+  /* ---------------------------------------------------------
+   *  Keyboard / D-pad navigation (mirrors useDpadNavigation.ts)
+   *  ArrowLeft / Enter  -> primary / Yes
+   *  ArrowRight / Down  -> secondary / No
+   *  Escape             -> home
+   * --------------------------------------------------------- */
+  window.addEventListener('keydown', function(e){
+    var path = currentPath();
+    if(e.key === 'Escape'){ navigate('/'); return; }
+
+    if(path === '/check'){
+      if(e.key === 'ArrowLeft' || e.key === 'Enter') onCoachAnswer(true);
+      else if(e.key === 'ArrowRight' || e.key === 'ArrowDown') onCoachAnswer(false);
+    } else if(path === '/simulator'){
+      if(e.key === 'ArrowLeft' || e.key === 'Enter') guessSimulator(false);
+      else if(e.key === 'ArrowRight' || e.key === 'ArrowDown') guessSimulator(true);
+    } else if(path === '/' ){
+      if(e.key === 'Enter') navigate('/check');
+    }
+  });
+
+  /* ---------------------------------------------------------
+   *  Boot
+   * --------------------------------------------------------- */
+  applyAccessibility();
+  router();
+})();
+</script>
+</body>
+</html>
